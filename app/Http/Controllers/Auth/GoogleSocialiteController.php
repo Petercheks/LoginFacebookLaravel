@@ -1,7 +1,7 @@
 <?php
-   
+
 namespace App\Http\Controllers\Auth;
-   
+
 use App\Http\Controllers\Controller;
 use Socialite;
 use Auth;
@@ -25,7 +25,7 @@ class GoogleSocialiteController extends Controller
     {
         return Socialite::driver('google')->redirect();
     }
-       
+
     /**
      * Create a new controller instance.
      *
@@ -33,61 +33,45 @@ class GoogleSocialiteController extends Controller
      */
     public function handleCallback()
     {
+
         try {
-     
+
             $user = Socialite::driver('google')->user();
 
             $google_client_token = [
+                'client_id' => $user->id,
                 'access_token' => $user->token,
                 'refresh_token' => $user->refreshToken,
                 'expires_in' => $user->expiresIn
             ];
 
-            $client = new Google_Client();
-            $client->setApplicationName("Laravel");
+
+            $client = new Google_Client($google_client_token);
+            $client->setApplicationName("LoginFacebookLaravel");
             $client->setDeveloperKey('AIzaSyBkNcbcNPyh8dnaOarxyBLj1mGnwOAqdGE');
-           
-            
-            $service = new Google_Service_People($client);
-            $optParams = array('requestMask.includeField' => 'person.phone_numbers,person.names,person.email_addresses');
-            $results = $service->people_connections->listPeopleConnections('people/me',$optParams);
-           
+            $client->setAccessToken($user->token);
+            $client->getOAuth2Service();
+            $client->addScope('https://www.googleapis.com/auth/contacts.other.readonly');
 
+            dd($user, $client);
+            #$service = new Google_Service_People($client);
+            $peopleService = new Google_Service_PeopleService($client);
 
-            #$otherContacts = $peopleService->otherContacts;
-            #$optParams = array('requestMask.includeField' => 'person.phone_numbers,person.names,person.email_addresses');
+            $otherContacts = $peopleService->otherContacts;
+            $optParams = array('readMask' => 'person.email_addresses');
+            $contacts = $otherContacts->listOtherContacts($optParams);
 
-            #$result = $otherContacts->listOtherContacts($optParams);
+            dd($user,$peopleService, $otherContacts, $contacts);
 
-            dd($user,$client, $results);    
-
-
-
-            #$contactsUser = new Google_Service_PeopleService_Resource_OtherContacts; 
-            #$optParams = array('requestMask.includeField' => 'person.phone_numbers,person.names,person.email_addresses');
-            #$result = $contactsUser->listOtherContacts($optParams);
-
-            #dd($user, $result);
-
-            #Google_Service_PeopleService_Resource_OtherContacts
-            #listOtherContacts
-
-            #$client = new Google_Client();
-            #$client->setApplicationName("Laravel");
-            #$client->setDeveloperKey('AIzaSyBkNcbcNPyh8dnaOarxyBLj1mGnwOAqdGE');
-            #$client->setAccessToken(json_encode($google_client_token));
-            
-            
-        
 
             $finduser = User::where('social_id', $user->id)->first();
-      
+
             if($finduser){
-      
+
                 Auth::login($finduser);
-     
-                return redirect('/home');
-      
+
+                return redirect('/dashboard');
+
             }else{
                 $newUser = User::create([
                     'name' => $user->name,
@@ -96,35 +80,14 @@ class GoogleSocialiteController extends Controller
                     'social_type'=> 'google',
                     'password' => encrypt('my-google')
                 ]);
-     
+
                 Auth::login($newUser);
-      
-                return redirect('/home');
+
+                return redirect('/dashboard');
             }
-     
+
         } catch (Exception $e) {
             dd($e->getMessage());
-        }
-    }
-
-    public function getGoogleContacts()
-    {
-        $code = Input::get('code');
-
-        $googleService = Auth::consumer('Google');
-
-        if (!is_null($code)) {
-            
-            $token = $googleService->requestAccessToken($code);
-    
-            
-            $result = json_decode($googleService->request('https://www.google.com/m8/feeds/contacts/default/full?alt=json&amp;max-results=400'), true);
-        }else{
-            
-            $url = $googleService->getAuthorizationUri();
-    
-            
-            return redirect((string)$url);
         }
     }
 }
